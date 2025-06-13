@@ -1,23 +1,59 @@
 const express = require('express');
 const router = express.Router();
+//const authMiddleware = require('../middleware/authMiddleware'); // para el autuh0
 const docenteController = require('../controllers/docenteController');
+const authMiddleware = require('../middleware/testAuth');
 
 // Crear curso
-router.post('/courses', docenteController.crearCurso);
+// Endpoint: POST http://localhost:3000/docente/curso
+router.post('/curso', authMiddleware, docenteController.crearCurso);
 
-// Hacer seed (grupos + estudiantes + asignaciones de pares)
-router.post('/courses/:cursoId/seed', docenteController.hacerSeed);
+// Ver cursos
+// Endpoint: GET http://localhost:3000/docente/cursos
+router.get('/cursos', authMiddleware, docenteController.obtenerCursosDelProfesor);
 
-// Obtener cursos del docente
-router.get('/courses', docenteController.obtenerCursos);
+// Poblar un curso con estudiantes (seed de 100)
+// POST http://localhost:3000/docente/curso/:cursoId/seed
+router.post('/curso/:cursoId/seed', authMiddleware, docenteController.seedEstudiantes);
 
-// Activar asignación de pares
-router.patch('/assignments/:asignId', docenteController.activarAsignacion);
+// Crear grupos automáticos en un curso (de tamaño X)
+// POST http://localhost:3000/docente/curso/:cursoId/grupos
+router.post('/curso/:cursoId/grupos', authMiddleware, docenteController.crearGrupos);
+
+// Cantidad alumnos del profesor
+// GET http://localhost:3000/docente/alumnos/total
+router.get('/alumnos/total', authMiddleware, docenteController.contarAlumnosDelProfesor);
+
+// Cantidad alumnos del curso
+// GET http://localhost:3000/docente/cursos/alumnos
+router.get('/cursos/alumnos', authMiddleware, docenteController.contarAlumnosPorCurso);
+
+// Cantidad de grupos por curso
+// GET http://localhost:3000/docente/cursos/grupos
+router.get('/cursos/grupos', authMiddleware, docenteController.contarGruposPorCurso);
+
+// Crear evaluacion
+// POST http://localhost:3000/docente/curso/:cursoId/evaluacion
+router.post('/curso/:cursoId/evaluacion', authMiddleware, docenteController.crearEvaluacion);
+
+// Activar o desactivar evaluacion
+// PUT http://localhost:3000/docente/evaluacion/:evaluacionId/estado
+router.put('/evaluacion/:evaluacionId/estado', authMiddleware, docenteController.cambiarEstadoEvaluacion);
+
+// Respuestas en una evaluación
+router.get('/evaluacion/:evaluacionId/resumen', authMiddleware, docenteController.contarRespuestasTotales);
+
+// Progreso estudiantes
+// GET /docente/curso/:cursoId/evaluacion/:evaluacionId/progreso
+router.get('/curso/:cursoId/evaluacion/:evaluacionId/progreso', authMiddleware, docenteController.progresoEstudiantesEvaluacion);
+
+
+/// FALTAN 
 
 // Generar feedback IA
-router.post('/courses/:cursoId/feedback/generate', docenteController.generarFeedback);
+//router.post('/courses/:cursoId/feedback/generate', docenteController.generarFeedback);
 
 // Obtener feedback generado
-router.get('/courses/:cursoId/feedback', docenteController.verFeedback);
+//router.get('/courses/:cursoId/feedback', docenteController.verFeedback);
 
 module.exports = router;
