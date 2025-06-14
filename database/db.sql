@@ -3,7 +3,7 @@ CREATE TABLE Usuario (
   nombre    TEXT      NOT NULL,
   email     TEXT      NOT NULL UNIQUE,
   rol       VARCHAR(20) NOT NULL CHECK (rol IN ('Estudiante', 'Docente')),
-  auth0_id    TEXT UNIQUE,
+  auth0_id    TEXT UNIQUE
 );
 
 CREATE TABLE Curso (
@@ -13,6 +13,7 @@ CREATE TABLE Curso (
   sigla       TEXT      NOT NULL,
   semestre    INT NOT NULL CHECK (semestre IN (1, 2)),
   seccion     INT       NOT NULL,
+  anio        INT       NOT NULL,
   cantidad_alumnos      INT DEFAULT 0,
   evaluaciones_activas  INT DEFAULT 0,
   cantidad_grupos       INT DEFAULT 0,
@@ -30,11 +31,13 @@ CREATE TABLE Grupo (
 );
 
 CREATE TABLE Inscripcion (
-  user_id    INT       NOT NULL,
-  grupo_id   INT       NOT NULL,                
-  PRIMARY KEY(user_id, grupo_id),
-  CONSTRAINT fk_insc_grupo   FOREIGN KEY(grupo_id) REFERENCES Grupo(grupo_id),
-  CONSTRAINT fk_insc_usuario FOREIGN KEY(user_id)   REFERENCES Usuario(user_id)
+  user_id   INT NOT NULL,
+  curso_id  INT NOT NULL,
+  grupo_id  INT,  -- opcional
+  PRIMARY KEY(user_id, curso_id),
+  CONSTRAINT fk_insc_usuario FOREIGN KEY(user_id) REFERENCES Usuario(user_id),
+  CONSTRAINT fk_insc_curso   FOREIGN KEY(curso_id) REFERENCES Curso(curso_id),
+  CONSTRAINT fk_insc_grupo   FOREIGN KEY(grupo_id) REFERENCES Grupo(grupo_id)
 );
 
 --  Una evaluación activa del curso X que tiene N grupos, y donde los estudiantes deben evaluarse entre sí

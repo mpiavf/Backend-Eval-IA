@@ -6,3 +6,5 @@ module.exports = (req, res, next) => {
   };
   next();
 };
+
+// simulacion usuario autenticado 

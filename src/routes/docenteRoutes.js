@@ -20,7 +20,7 @@ router.post('/curso/:cursoId/seed', authMiddleware, docenteController.seedEstudi
 // POST http://localhost:3000/docente/curso/:cursoId/grupos
 router.post('/curso/:cursoId/grupos', authMiddleware, docenteController.crearGrupos);
 
-// Cantidad alumnos del profesor
+// Cantidad alumnos del profesor (por profesor)
 // GET http://localhost:3000/docente/alumnos/total
 router.get('/alumnos/total', authMiddleware, docenteController.contarAlumnosDelProfesor);
 
@@ -36,11 +36,19 @@ router.get('/cursos/grupos', authMiddleware, docenteController.contarGruposPorCu
 // POST http://localhost:3000/docente/curso/:cursoId/evaluacion
 router.post('/curso/:cursoId/evaluacion', authMiddleware, docenteController.crearEvaluacion);
 
+// Ver todas las evaluaciones de un curso
+// GET /docente/curso/:cursoId/evaluaciones/activas
+router.get('/curso/:cursoId/evaluaciones', authMiddleware, docenteController.getEvaluacionesDelCurso);
+
+// Ver evaluaciones activas de un curso
+// GET /docente/curso/:cursoId/evaluaciones/activas
+router.get('/curso/:cursoId/evaluaciones/activas', authMiddleware, docenteController.getEvaluacionesActivas);
+
 // Activar o desactivar evaluacion
 // PUT http://localhost:3000/docente/evaluacion/:evaluacionId/estado
 router.put('/evaluacion/:evaluacionId/estado', authMiddleware, docenteController.cambiarEstadoEvaluacion);
 
-// Respuestas en una evaluación
+// Cantidad respuestas en una evaluación
 router.get('/evaluacion/:evaluacionId/resumen', authMiddleware, docenteController.contarRespuestasTotales);
 
 // Progreso estudiantes

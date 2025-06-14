@@ -1,20 +1,17 @@
-console.log("Controlador docente cargado")
 const pool = require('../config/db');
 
-
 // Crear curso
-
 exports.crearCurso = async (req, res) => {
-  const { nombre, sigla, semestre, seccion } = req.body;
+  const { nombre, sigla, semestre, seccion, anio } = req.body;
   const profesor_id = req.user.user_id; // viene del token/auth middleware
 
   try {
     const result = await pool.query(
       `INSERT INTO Curso 
-        (nombre, sigla, semestre, seccion, profesor_id) 
-       VALUES ($1, $2, $3, $4, $5) 
+        (nombre, sigla, semestre, seccion, anio, profesor_id) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING *`,
-      [nombre, sigla, semestre, seccion, profesor_id]
+      [nombre, sigla, semestre, seccion, anio, profesor_id]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -24,7 +21,6 @@ exports.crearCurso = async (req, res) => {
 
 
 // Ver cursos profesor
-
 exports.obtenerCursosDelProfesor = async (req, res) => {
   const profesor_id = req.user.user_id; // token decodificado
   try {
@@ -38,31 +34,12 @@ exports.obtenerCursosDelProfesor = async (req, res) => {
   }
 };
 
-
-// estudiantes de docente
-// total evaluaciones
-
-exports.hacerSeed = async (req, res) => {
-  const { cursoId } = req.params;
-  try {
-    // SIMULAR SEED
-
-    res.status(200).json({ message: 'Seed ejecutado correctamente' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-
 // Poblar estudiantes
-
 exports.seedEstudiantes = async (req, res) => {
   const { cursoId } = req.params;
   const cantidad = 100;
-
   try {
     const nuevosUsuarios = [];
-
 	// por ahora
     for (let i = 1; i <= cantidad; i++) {
       const nombre = `Estudiante ${i}`;
@@ -79,10 +56,10 @@ exports.seedEstudiantes = async (req, res) => {
 
       // inscribir al curso (aún sin grupo)
       await pool.query(
-        `INSERT INTO Inscripcion (user_id, grupo_id)
-         VALUES ($1, NULL)`,
-        [userId]
-      );
+			`INSERT INTO Inscripcion (user_id, curso_id)
+			VALUES ($1, $2)`,
+			[userId, cursoId]
+		)
       nuevosUsuarios.push(userId);
     }
 
@@ -101,44 +78,61 @@ exports.crearGrupos = async (req, res) => {
   const { cursoId } = req.params;
   const { tamanoGrupo } = req.body;
 
+  if (!tamanoGrupo || tamanoGrupo <= 0) {
+    return res.status(400).json({ error: 'Tamaño de grupo debe ser un número positivo' });
+  }
+
   try {
-    // obtener ids  los estudiantes en ese curso que aún no tienen grupo
     const estudiantesRes = await pool.query(
-      `SELECT i.user_id
-       FROM Inscripcion i
-       JOIN Usuario u ON i.user_id = u.user_id
-       JOIN Grupo g ON i.grupo_id = g.grupo_id
-       WHERE g.curso_id = $1`,
+      `SELECT user_id
+       FROM Inscripcion
+       WHERE curso_id = $1 AND grupo_id IS NULL`,
       [cursoId]
     );
 
     const estudiantes = estudiantesRes.rows.map(row => row.user_id);
 
     if (estudiantes.length === 0) {
-      return res.status(400).json({ error: 'No hay estudiantes en este curso' });
+      return res.status(400).json({ error: 'No hay estudiantes sin grupo en este curso' });
     }
 
-    let grupoCount = 0;
+    const totalEstudiantes = estudiantes.length;
+    const baseGrupoCount = Math.floor(totalEstudiantes / tamanoGrupo);
+    const extraEstudiantes = totalEstudiantes % tamanoGrupo;
 
-    for (let i = 0; i < estudiantes.length; i += tamanoGrupo) {
+    let grupoCount = 0;
+    let index = 0;
+
+    const gruposResumen = [];
+
+    for (let i = 0; i < baseGrupoCount; i++) {
+      const size = tamanoGrupo + (i < extraEstudiantes ? 1 : 0); // Distribuir extras
+      const grupoNombre = `Grupo ${++grupoCount}`;
+
       const grupoRes = await pool.query(
         `INSERT INTO Grupo (curso_id, nombre) VALUES ($1, $2) RETURNING grupo_id`,
-        [cursoId, `Grupo ${++grupoCount}`]
+        [cursoId, grupoNombre]
       );
 
       const grupoId = grupoRes.rows[0].grupo_id;
-
-      const grupoEstudiantes = estudiantes.slice(i, i + tamanoGrupo);
+      const grupoEstudiantes = estudiantes.slice(index, index + size);
 
       for (const userId of grupoEstudiantes) {
         await pool.query(
-          `UPDATE Inscripcion SET grupo_id = $1 WHERE user_id = $2`,
-          [grupoId, userId]
+          `UPDATE Inscripcion
+           SET grupo_id = $1
+           WHERE user_id = $2 AND curso_id = $3`,
+          [grupoId, userId, cursoId]
         );
       }
+
+      gruposResumen.push({ grupoNombre, grupoId, cantidad: grupoEstudiantes.length });
+      index += size;
     }
+
     res.status(201).json({
-      message: `Se crearon ${grupoCount} grupos de hasta ${tamanoGrupo} estudiantes`
+      message: `Se crearon ${grupoCount} grupos distribuyendo ${totalEstudiantes} estudiantes`,
+      grupos: gruposResumen
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -154,8 +148,7 @@ exports.contarAlumnosDelProfesor = async (req, res) => {
       `
       SELECT COUNT(DISTINCT i.user_id) AS total_alumnos
       FROM Curso c
-      JOIN Grupo g ON g.curso_id = c.curso_id
-      JOIN Inscripcion i ON i.grupo_id = g.grupo_id
+      JOIN Inscripcion i ON i.curso_id = c.curso_id
       WHERE c.profesor_id = $1
       `,
       [profesor_id]
@@ -170,16 +163,19 @@ exports.contarAlumnosDelProfesor = async (req, res) => {
 // Cantidad alumnos por curso 
 
 exports.contarAlumnosPorCurso = async (req, res) => {
+  const profesor_id = req.user.user_id;
+
   try {
     const result = await pool.query(
       `
       SELECT c.curso_id, c.nombre, COUNT(i.user_id) AS cantidad_alumnos
       FROM Curso c
-      JOIN Grupo g ON g.curso_id = c.curso_id
-      JOIN Inscripcion i ON i.grupo_id = g.grupo_id
+      LEFT JOIN Inscripcion i ON i.curso_id = c.curso_id
+      WHERE c.profesor_id = $1
       GROUP BY c.curso_id
       ORDER BY c.curso_id
-      `
+      `,
+      [profesor_id]
     );
 
     res.status(200).json(result.rows);
@@ -190,14 +186,19 @@ exports.contarAlumnosPorCurso = async (req, res) => {
 
 // Cantidad de grupos por curso
 exports.contarGruposPorCurso = async (req, res) => {
+  const profesor_id = req.user.user_id;
+
   try {
     const result = await pool.query(
       `
-      SELECT curso_id, COUNT(*) AS cantidad_grupos
-      FROM Grupo
-      GROUP BY curso_id
-      ORDER BY curso_id
-      `
+      SELECT c.curso_id, c.nombre, COUNT(g.grupo_id) AS cantidad_grupos
+      FROM Curso c
+      JOIN Grupo g ON g.curso_id = c.curso_id
+      WHERE c.profesor_id = $1
+      GROUP BY c.curso_id
+      ORDER BY c.curso_id;
+      `,
+      [profesor_id] 
     );
 
     res.status(200).json(result.rows);
@@ -206,7 +207,7 @@ exports.contarGruposPorCurso = async (req, res) => {
   }
 };
 
-// Crear evaluacion
+// Crear evaluacion (inactiva por defecto)
 
 exports.crearEvaluacion = async (req, res) => {
   const { cursoId } = req.params;
@@ -243,10 +244,10 @@ exports.crearEvaluacion = async (req, res) => {
       };
     });
 
-    // 3. Crear la evaluación
+    // 3. Crear
     const evaluacionRes = await pool.query(
       `INSERT INTO Evaluacion (curso_id, nombre, activa, cantidad_grupos)
-       VALUES ($1, $2, TRUE, $3)
+       VALUES ($1, $2, False, $3)
        RETURNING evaluacion_id`,
       [cursoId, nombre, grupos.length]
     );
@@ -284,11 +285,49 @@ exports.crearEvaluacion = async (req, res) => {
   }
 };
 
+// Ver todas las evaluaciones de un curso 
 
-// Estado de evaluacion 
+exports.getEvaluacionesDelCurso = async (req, res) => {
+  const { cursoId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM Evaluacion
+       WHERE curso_id = $1
+       ORDER BY creada_en DESC`,
+      [cursoId]
+    );
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Ver evaluaciones activas de un curso
+
+exports.getEvaluacionesActivas = async (req, res) => {
+  const { cursoId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM Evaluacion
+       WHERE curso_id = $1 AND activa = TRUE
+       ORDER BY creada_en DESC`,
+      [cursoId]
+    );
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+// Cambiar estado de evaluacion 
 exports.cambiarEstadoEvaluacion = async (req, res) => {
   const { evaluacionId } = req.params;
-  const { activa } = req.body; // true o false
+  const { activa } = req.body;
 
   try {
     const result = await pool.query(
@@ -299,6 +338,12 @@ exports.cambiarEstadoEvaluacion = async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Evaluación no encontrada' });
     }
+
+    // actualizar estado de asignaciones asociadas
+    await pool.query(
+      `UPDATE Asignacion_Pares SET isActive = $1 WHERE evaluacion_id = $2`,
+      [activa, evaluacionId]
+    );
 
     res.status(200).json({
       message: `Evaluación ${activa ? 'activada' : 'desactivada'} correctamente`,
@@ -326,17 +371,22 @@ exports.contarRespuestasTotales = async (req, res) => {
       [evaluacionId]
     );
 
+	const total = parseInt(totalAsignacionesRes.rows[0].count);
+    const respondidas = parseInt(respuestasRes.rows[0].count);
+    const porcentaje = total > 0 ? ((respondidas / total) * 100).toFixed(2) : '0.00';
+
     res.status(200).json({
-      total_asignaciones: parseInt(totalAsignacionesRes.rows[0].count),
-      respuestas_realizadas: parseInt(respuestasRes.rows[0].count),
-      completado: parseInt(respuestasRes.rows[0].count) === parseInt(totalAsignacionesRes.rows[0].count)
+      total_asignaciones: total,
+      respuestas_realizadas: respondidas,
+      porcentaje_avance: `${porcentaje}%`,
+      completado: respondidas === total
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Progreso de estudiante
+// Progreso de estudiante por grupo
 
 exports.progresoEstudiantesEvaluacion = async (req, res) => {
   const { cursoId, evaluacionId } = req.params;
@@ -344,25 +394,42 @@ exports.progresoEstudiantesEvaluacion = async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
+        g.nombre AS grupo,
         u.user_id,
         u.nombre,
         COUNT(ap.asign_id) AS total_asignaciones,
         COUNT(r.respuesta_id) AS respuestas_enviadas
       FROM Usuario u
-      JOIN Asignacion_Pares ap ON u.user_id = ap.evaluador_id
+      JOIN Inscripcion i ON u.user_id = i.user_id
+      JOIN Grupo g ON i.grupo_id = g.grupo_id
+      JOIN Asignacion_Pares ap ON u.user_id = ap.evaluador_id AND ap.grupo_id = g.grupo_id
       LEFT JOIN Respuesta r ON r.asign_id = ap.asign_id
-      WHERE ap.evaluacion_id = $1
-        AND u.user_id IN (
-          SELECT i.user_id
-          FROM Inscripcion i
-          JOIN Grupo g ON i.grupo_id = g.grupo_id
-          WHERE g.curso_id = $2
-        )
-      GROUP BY u.user_id, u.nombre
-      ORDER BY u.nombre
+      WHERE ap.evaluacion_id = $1 AND g.curso_id = $2
+      GROUP BY g.nombre, u.user_id, u.nombre
+      ORDER BY g.nombre, u.nombre
     `, [evaluacionId, cursoId]);
 
-    res.status(200).json(result.rows);
+    // Agrupar por grupo
+    const agrupado = {};
+
+    result.rows.forEach(row => {
+      const grupo = row.grupo;
+      if (!agrupado[grupo]) agrupado[grupo] = [];
+
+      const total = parseInt(row.total_asignaciones);
+      const hechas = parseInt(row.respuestas_enviadas);
+      const porcentaje = total > 0 ? ((hechas / total) * 100).toFixed(2) : '0.00';
+
+      agrupado[grupo].push({
+        user_id: row.user_id,
+        nombre: row.nombre,
+        total_asignaciones: total,
+        respuestas_enviadas: hechas,
+        porcentaje_avance: `${porcentaje}%`
+      });
+    });
+
+    res.status(200).json(agrupado);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -370,7 +437,7 @@ exports.progresoEstudiantesEvaluacion = async (req, res) => {
 
 
 
-/// FALTAS
+/// FALTAN boton generar feedback
 
 
 //exports.generarFeedback = async (req, res) => {
