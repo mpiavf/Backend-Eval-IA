@@ -51,7 +51,7 @@ CREATE TABLE Evaluacion (
   cantidad_grupos  INT DEFAULT 0,
   completadas      INT DEFAULT 0,
   creada_en        TIMESTAMP DEFAULT NOW(),
-  fecha_limite     TIMESTAMP DEFAULT (NOW() + INTERVAL '7 days'),
+  fecha_limite     TIMESTAMP, 
 
   CONSTRAINT fk_eval_curso FOREIGN KEY (curso_id)
     REFERENCES Curso(curso_id)

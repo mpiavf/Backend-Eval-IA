@@ -352,46 +352,59 @@ exports.getEvaluacionesFinalizadas = async (req, res) => {
 exports.cambiarEstadoEvaluacion = async (req, res) => {
   const { evaluacionId } = req.params;
   const { activa } = req.body;
-
   try {
     // 1. Obtener el estado actual
     const evaluacion = await pool.query(
-      `SELECT activa, finalizada FROM Evaluacion WHERE evaluacion_id = $1`,
+      `SELECT activa, finalizada, fecha_limite FROM Evaluacion WHERE evaluacion_id = $1`,
       [evaluacionId]
     );
-
     if (evaluacion.rowCount === 0) {
       return res.status(404).json({ error: 'Evaluación no encontrada' });
     }
-
-    const { activa: actualActiva, finalizada } = evaluacion.rows[0];
-
-    // 2. Validar que no esté finalizada
+    const { activa: actualActiva, finalizada, fecha_limite } = evaluacion.rows[0];
     if (finalizada) {
       return res.status(400).json({ error: 'La evaluación ya fue finalizada y no se puede modificar.' });
     }
+    // Validar activación por primera vez
+    if (!actualActiva && activa === true) {
+      // Actualizar activa y fecha_limite
+      const result = await pool.query(
+        `UPDATE Evaluacion
+         SET activa = true,
+             fecha_limite = NOW() + INTERVAL '7 days'
+         WHERE evaluacion_id = $1
+         RETURNING *`,
+        [evaluacionId]
+      );
 
-    // 3. Validar que no se pueda reactivar
-    if (!actualActiva && activa === true && actualActiva !== false) {
-      return res.status(400).json({ error: 'La evaluación ya fue activada anteriormente y no puede reactivarse.' });
+      await pool.query(
+        `UPDATE Asignacion_Pares SET isActive = true WHERE evaluacion_id = $1`,
+        [evaluacionId]
+      );
+
+      return res.status(200).json({
+        message: 'Evaluación activada correctamente',
+        evaluacion: result.rows[0]
+      });
     }
+    // Si se quiere desactivar
+    if (actualActiva && activa === false) {
+      const result = await pool.query(
+        `UPDATE Evaluacion SET activa = false WHERE evaluacion_id = $1 RETURNING *`,
+        [evaluacionId]
+      );
 
-    // 4. Ejecutar cambio
-    const result = await pool.query(
-      `UPDATE Evaluacion SET activa = $1 WHERE evaluacion_id = $2 RETURNING *`,
-      [activa, evaluacionId]
-    );
+      await pool.query(
+        `UPDATE Asignacion_Pares SET isActive = false WHERE evaluacion_id = $1`,
+        [evaluacionId]
+      );
 
-    // 5. Actualizar asignaciones
-    await pool.query(
-      `UPDATE Asignacion_Pares SET isActive = $1 WHERE evaluacion_id = $2`,
-      [activa, evaluacionId]
-    );
-
-    res.status(200).json({
-      message: `Evaluación ${activa ? 'activada' : 'desactivada'} correctamente`,
-      evaluacion: result.rows[0]
-    });
+      return res.status(200).json({
+        message: 'Evaluación desactivada correctamente',
+        evaluacion: result.rows[0]
+      });
+    }
+    return res.status(400).json({ error: 'No se puede reactivar una evaluación ya activada anteriormente.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
