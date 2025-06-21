@@ -46,9 +46,12 @@ CREATE TABLE Evaluacion (
   curso_id         INT NOT NULL,
   nombre           TEXT NOT NULL,
   activa           BOOLEAN DEFAULT FALSE,
+  finalizada       BOOLEAN DEFAULT FALSE,
+  feedback_visible BOOLEAN DEFAULT FALSE,  
   cantidad_grupos  INT DEFAULT 0,
   completadas      INT DEFAULT 0,
   creada_en        TIMESTAMP DEFAULT NOW(),
+  fecha_limite     TIMESTAMP DEFAULT (NOW() + INTERVAL '7 days'),
 
   CONSTRAINT fk_eval_curso FOREIGN KEY (curso_id)
     REFERENCES Curso(curso_id)
@@ -75,7 +78,8 @@ CREATE TABLE Respuesta (
   puntuacion     SMALLINT   NOT NULL          
     CHECK (puntuacion BETWEEN 1 AND 7),
   fortalezas     TEXT       NULL,              
-  aspectos_dev   TEXT       NULL,              
+  aspectos_dev   TEXT       NULL,
+  feedback_ia    TEXT       NULL,               
   enviado_at     TIMESTAMP  NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_resp_asig FOREIGN KEY(asign_id)
     REFERENCES Asignacion_Pares(asign_id)

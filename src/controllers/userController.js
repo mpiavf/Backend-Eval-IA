@@ -1,21 +1,25 @@
-const userModel = require('../models/userModel');
+const pool = require('../config/db');
 
-const crearUsuario = async (req, res) => {
+// Para pruebas
+
+// Crear usuarios
+exports.crearUsuario = async (req, res) => {
+  const { nombre, email, rol } = req.body;
+
+  if (!nombre || !email || !rol) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
+
   try {
-    const nuevoUsuario = await userModel.crearUsuario(req.body);
-    res.status(201).json(nuevoUsuario);
-  } catch (error) {
-    res.status(500).json({ error: 'Error en creacion usuario' });
+    const result = await pool.query(
+      `INSERT INTO Usuario (nombre, email, rol)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [nombre, email, rol]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
-
-const obtenerUsuarios = async (req, res) => {
-  try {
-    const usuarios = await userModel.obtenerUsuarios();
-    res.status(200).json(usuarios);
-  } catch (error) {
-    res.status(500).json({ error: 'Error en obtener usuarios' });
-  }
-};
-
-module.exports = {crearUsuario, obtenerUsuarios};

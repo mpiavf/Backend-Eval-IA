@@ -62,6 +62,14 @@ exports.seedEstudiantes = async (req, res) => {
 		)
       nuevosUsuarios.push(userId);
     }
+	await pool.query(
+  `UPDATE Curso
+   SET cantidad_alumnos = (
+     SELECT COUNT(*) FROM Inscripcion WHERE curso_id = $1
+   )
+   WHERE curso_id = $1`,
+  [cursoId]
+);
 
     res.status(201).json({
       message: `Se crearon ${cantidad} estudiantes para el curso ${cursoId}`,
@@ -285,9 +293,8 @@ exports.crearEvaluacion = async (req, res) => {
   }
 };
 
-// Ver todas las evaluaciones de un curso 
-
-exports.getEvaluacionesDelCurso = async (req, res) => {
+// Ver todas las evaluaciones (activas o no) de un curso
+exports.getTodasEvaluacionesCurso = async (req, res) => {
   const { cursoId } = req.params;
 
   try {
@@ -305,7 +312,6 @@ exports.getEvaluacionesDelCurso = async (req, res) => {
 };
 
 // Ver evaluaciones activas de un curso
-
 exports.getEvaluacionesActivas = async (req, res) => {
   const { cursoId } = req.params;
 
@@ -323,23 +329,60 @@ exports.getEvaluacionesActivas = async (req, res) => {
   }
 };
 
+// Ver evaluaciones finalizadas de un curso
+exports.getEvaluacionesFinalizadas = async (req, res) => {
+  const { cursoId } = req.params;
 
-// Cambiar estado de evaluacion 
+  try {
+    const result = await pool.query(
+      `SELECT * FROM Evaluacion
+       WHERE curso_id = $1 AND finalizada = TRUE
+       ORDER BY creada_en DESC`,
+      [cursoId]
+    );
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+// Cambiar estado de evaluacion (solo se puede activar una vez)
 exports.cambiarEstadoEvaluacion = async (req, res) => {
   const { evaluacionId } = req.params;
   const { activa } = req.body;
 
   try {
+    // 1. Obtener el estado actual
+    const evaluacion = await pool.query(
+      `SELECT activa, finalizada FROM Evaluacion WHERE evaluacion_id = $1`,
+      [evaluacionId]
+    );
+
+    if (evaluacion.rowCount === 0) {
+      return res.status(404).json({ error: 'Evaluación no encontrada' });
+    }
+
+    const { activa: actualActiva, finalizada } = evaluacion.rows[0];
+
+    // 2. Validar que no esté finalizada
+    if (finalizada) {
+      return res.status(400).json({ error: 'La evaluación ya fue finalizada y no se puede modificar.' });
+    }
+
+    // 3. Validar que no se pueda reactivar
+    if (!actualActiva && activa === true && actualActiva !== false) {
+      return res.status(400).json({ error: 'La evaluación ya fue activada anteriormente y no puede reactivarse.' });
+    }
+
+    // 4. Ejecutar cambio
     const result = await pool.query(
       `UPDATE Evaluacion SET activa = $1 WHERE evaluacion_id = $2 RETURNING *`,
       [activa, evaluacionId]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Evaluación no encontrada' });
-    }
-
-    // actualizar estado de asignaciones asociadas
+    // 5. Actualizar asignaciones
     await pool.query(
       `UPDATE Asignacion_Pares SET isActive = $1 WHERE evaluacion_id = $2`,
       [activa, evaluacionId]
@@ -436,19 +479,81 @@ exports.progresoEstudiantesEvaluacion = async (req, res) => {
 };
 
 
+// Finalizar la evaluacion:  (ya no puede volver a activarse)
 
-/// FALTAN boton generar feedback
+exports.finalizarEvaluacion = async (req, res) => {
+  const { evaluacionId } = req.params;
+
+  try {
+    const evaluacion = await pool.query(
+      `SELECT * FROM Evaluacion WHERE evaluacion_id = $1`,
+      [evaluacionId]
+    );
+
+    if (evaluacion.rowCount === 0) {
+      return res.status(404).json({ error: 'Evaluación no encontrada' });
+    }
+
+    if (evaluacion.rows[0].finalizada) {
+      return res.status(400).json({ error: 'La evaluación ya está finalizada' });
+    }
+
+    // Desactivar la evaluación y marcar como finalizada
+    await pool.query(
+      `UPDATE Evaluacion 
+       SET activa = false, finalizada = true 
+       WHERE evaluacion_id = $1`,
+      [evaluacionId]
+    );
+
+    // Desactivar todas las asignaciones
+    await pool.query(
+      `UPDATE Asignacion_Pares 
+       SET isActive = false 
+       WHERE evaluacion_id = $1`,
+      [evaluacionId]
+    );
+
+    res.status(200).json({ message: 'Evaluación finalizada correctamente' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
 
-//exports.generarFeedback = async (req, res) => {
-  // logica de generación de feedback 
-  //res.json({ message: 'Feedback generado exitosamente (simulado)' });
-//};
+// boton para permitir mostrar el feedback a los alumnos
+exports.cambiarVisibilidadFeedback = async (req, res) => {
+  const { evaluacionId } = req.params;
+  const { visible } = req.body;
 
-//exports.verFeedback = async (req, res) => {
-  // Retornar feedback simulado para cada alumno
- // res.json([
-   // { user_id: 1, feedback: 'Buen trabajo colaborativo' },
-   // { user_id: 2, feedback: 'Mejorar participación en clase' }
-  ///]);
-///};
+  try {
+    // Verificar que la evaluación exista y esté finalizada
+    const evaluacion = await pool.query(
+      `SELECT finalizada FROM Evaluacion WHERE evaluacion_id = $1`,
+      [evaluacionId]
+    );
+
+    if (evaluacion.rowCount === 0) {
+      return res.status(404).json({ error: 'Evaluación no encontrada' });
+    }
+
+    if (!evaluacion.rows[0].finalizada) {
+      return res.status(400).json({
+        error: 'La evaluación no ha sido finalizada. No se puede habilitar feedback aún.'
+      });
+    }
+
+    // Actualizar visibilidad del feedback
+    const result = await pool.query(
+      `UPDATE Evaluacion SET feedback_visible = $1 WHERE evaluacion_id = $2 RETURNING *`,
+      [visible, evaluacionId]
+    );
+
+    res.status(200).json({
+      message: `Feedback ${visible ? 'habilitado' : 'oculto'} correctamente`,
+      evaluacion: result.rows[0]
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

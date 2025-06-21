@@ -54,11 +54,18 @@ Ver las tablas de la base de datos:
 Estando conectado en la base de datos evaluacion_pares, ejecutar: 
 
 ```
+-- Crear usuario Docente
 INSERT INTO Usuario (nombre, email, rol)
 VALUES ('Docente Demo', 'docente@demo.com', 'Docente');
+
+-- Crear usuario Estudiante
+INSERT INTO Usuario (nombre, email, rol)
+VALUES ('Estudiante Demo', 'estudiante@demo.com', 'Estudiante');
 ```
 
-Esto funciona para el middleware testAuth.js que está simulando que el usuario con user_id: 1 está autenticado.
+Esto funciona para los middlewares de autenticación de prueba.
+Para simular autenticación como docente, se usa testAuth.js.
+Para simular autenticación como estudiante, se usa testAuthEstudiante.js.
 
 ### Correr el Backend
 
@@ -143,23 +150,27 @@ Body JSON:
   "nombre": "Evaluación Parcial 1"
 }
 ```
-9. Ver todas las evaluaciones de un curso
-```
-GET /docente/curso/:cursoId/evaluaciones
-```
-Devuelve todas las evaluaciones (activas o no) del curso.
-
-10. Ver evaluaciones activas de un curso
+9. Ver evaluaciones activas de un curso
 ```
 GET /docente/curso/:cursoId/evaluaciones/activas
 ```
 Devuelve solo las evaluaciones activas del curso.
+10. Ver todas las evaluaciones (activas o no)  de un curso
+```
+GET /docente/curso/:cursoId/evaluaciones
+```
+Devuelve todas las evaluaciones (activas o no) del curso.
+11. Ver evaluaciones finalizadas de un curso
+```
+GET /docente/curso/:cursoId/evaluaciones/finalizadas
+```
+Devuelve todas las evaluaciones finalizadas del curso.
 
-11. Cambiar estado de evaluación (activar/desactivar)
+12. Activar evaluación
 ```
 PUT /docente/evaluacion/:evaluacionId/estado
 ```
-Activa o desactiva una evaluación, y sus asignaciones.
+Se activa la evaluacion, solo se puede hacer una vez.
 
 Body JSON:
 ```
@@ -167,15 +178,104 @@ Body JSON:
   "activa": true
 }
 ```
-12. Contar respuestas en una evaluación
+13. Contar respuestas en una evaluación
 ```
 GET /docente/evaluacion/:evaluacionId/resumen
 ```
 Devuelve cuántas respuestas han sido registradas y el porcentaje de avance.
 
-12. Progreso por estudiante en una evaluación (agrupado por grupo)
+14. Progreso por estudiante en una evaluación (agrupado por grupo)
 ```
 GET /docente/curso/:cursoId/evaluacion/:evaluacionId/progreso
 ```
-Devuelve por grupo el avance de cada estudiante evaluador en la evaluación (número de respuestas enviadas respecto al total que debe hacer).
+Devuelve por grupo el avance de cada estudiante evaluador en la evaluación (número de respuestas enviadas respecto al total que debe hacer). 
 
+15. Finalizar evaluación (no puede volver a activarse)
+```
+PUT /docente/evaluacion/:evaluacionId/finalizar
+
+```
+Marca la evaluación como finalizada y desactiva las asignaciones.
+Una vez finalizada, no se puede volver a activar.
+
+16. Cambiar visibilidad del feedback para los estudiantes
+```
+PUT /docente/evaluacion/:evaluacionId/finalizar
+
+```
+Habilita u oculta el feedback para los estudiantes, solo si la evaluación ya está finalizada.
+Body JSON:
+```
+{
+  "visible": true
+}
+```
+##### Estudiante
+
+1. Ver cursos en los que está inscrito
+
+```
+GET /estudiante/cursos
+```
+Devuelve todos los cursos en los que el estudiante autenticado está inscrito.
+
+2. Inscribirse a un curso (para pruebas)
+
+```
+POST /estudiante/inscribirse
+```
+Permite que el estudiante se inscriba a un curso. 
+
+
+Body JSON:
+```
+{
+  "cursoId": 1
+}
+```
+
+3. Ver grupo al que pertenece
+```
+GET /estudiante/grupo
+```
+Devuelve el grupo y curso asociado al estudiante.
+
+4. Ver todas las evaluaciones asignadas
+```
+GET /estudiante/evaluaciones
+```
+Lista todas las evaluaciones asignadas al estudiante (activas o no), marcando si ya respondió cada una.
+
+5. Ver evaluaciones pendientes
+```
+GET /estudiante/evaluaciones/pendientes
+```
+Devuelve solo las evaluaciones activas, no finalizadas y que aún no han sido respondidas por el estudiante.
+
+6. Ver evaluaciones completadas
+```
+GET /estudiante/evaluaciones/completadas
+```
+Devuelve las evaluaciones que el estudiante ya completó (es decir, ya respondió), incluyendo también aquellas que han sido finalizadas.
+
+7. Responder una evaluación
+
+```
+POST /estudiante/evaluacion/:asignId/responder
+```
+Permite que el estudiante se inscriba a un curso. 
+
+
+Body JSON:
+```
+{
+  "puntuacion": 6,
+  "fortalezas": "Buen trabajo en equipo",
+  "aspectos_dev": "Podría mejorar la documentación"
+}
+```
+8. Ver feedback recibido
+```
+GET /estudiante/feedback
+```
+Devuelve el promedio de puntuación recibida por el estudiante en evaluaciones donde el feedback fue habilitado por el docente. Solo muestra feedback si la evaluación fue finalizada y el profesor permitió visibilidad.

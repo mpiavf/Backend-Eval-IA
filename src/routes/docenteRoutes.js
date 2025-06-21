@@ -36,15 +36,19 @@ router.get('/cursos/grupos', authMiddleware, docenteController.contarGruposPorCu
 // POST http://localhost:3000/docente/curso/:cursoId/evaluacion
 router.post('/curso/:cursoId/evaluacion', authMiddleware, docenteController.crearEvaluacion);
 
-// Ver todas las evaluaciones de un curso
-// GET /docente/curso/:cursoId/evaluaciones/activas
-router.get('/curso/:cursoId/evaluaciones', authMiddleware, docenteController.getEvaluacionesDelCurso);
-
 // Ver evaluaciones activas de un curso
 // GET /docente/curso/:cursoId/evaluaciones/activas
 router.get('/curso/:cursoId/evaluaciones/activas', authMiddleware, docenteController.getEvaluacionesActivas);
 
-// Activar o desactivar evaluacion
+// Ver todas las evaluaciones (activas o no) de un curso
+// GET http://localhost:3000/docente/curso/:cursoId/evaluaciones
+router.get('/curso/:cursoId/evaluaciones', authMiddleware, docenteController.getTodasEvaluacionesCurso);
+
+// Ver evaluaciones finalizadas de un curso
+// GET http://localhost:3000/docente/curso/:cursoId/evaluaciones/finalizadas
+router.get('/curso/:cursoId/evaluaciones/finalizadas', authMiddleware, docenteController.getEvaluacionesFinalizadas);
+
+// Activar 
 // PUT http://localhost:3000/docente/evaluacion/:evaluacionId/estado
 router.put('/evaluacion/:evaluacionId/estado', authMiddleware, docenteController.cambiarEstadoEvaluacion);
 
@@ -55,13 +59,12 @@ router.get('/evaluacion/:evaluacionId/resumen', authMiddleware, docenteControlle
 // GET /docente/curso/:cursoId/evaluacion/:evaluacionId/progreso
 router.get('/curso/:cursoId/evaluacion/:evaluacionId/progreso', authMiddleware, docenteController.progresoEstudiantesEvaluacion);
 
+// Finalizar evaluación (no puede volver a activarse)
+// PUT /docente/evaluacion/:evaluacionId/finalizar
+router.put('/evaluacion/:evaluacionId/finalizar', authMiddleware, docenteController.finalizarEvaluacion);
 
-/// FALTAN 
-
-// Generar feedback IA
-//router.post('/courses/:cursoId/feedback/generate', docenteController.generarFeedback);
-
-// Obtener feedback generado
-//router.get('/courses/:cursoId/feedback', docenteController.verFeedback);
+// Cambiar visibilidad del feedback para los estudiantes
+// PUT /docente/evaluacion/:evaluacionId/feedback
+router.put('/evaluacion/:evaluacionId/feedback', authMiddleware, docenteController.cambiarVisibilidadFeedback);
 
 module.exports = router;
