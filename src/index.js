@@ -1,6 +1,8 @@
 const express = require('express');
 const app = express();
 const pool = require('./config/db');
+const fs = require('fs');
+const path = require('path');
 
 const userRoutes = require('./routes/userRoutes');
 const docenteRoutes = require('./routes/docenteRoutes');
@@ -26,6 +28,19 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
+
+app.get('/init', async (req, res) => {
+  try {
+    const sqlPath = path.join(__dirname, '..', 'database', 'db.sql');
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    await pool.query(sql);
+    res.json({ status: 'ok', message: 'Base de datos inicializada' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
