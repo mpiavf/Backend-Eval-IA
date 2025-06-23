@@ -13,6 +13,7 @@ app.use(express.json());
 app.use('/usuarios', userRoutes);
 app.use('/docente', docenteRoutes);
 app.use('/estudiante', estudianteRoutes);
+app.use('/debug', require('./routes/debugRoutes'));
 
 
 app.get('/', (req, res) => {
