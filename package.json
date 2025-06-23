@@ -5,7 +5,7 @@
   "main": "test.js",
   "scripts": {
     "start": "node src/index.js",
-  	"dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js"
   },
   "repository": {
     "type": "git",
@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/mpiavf/Backend-Eval-IA#readme",
   "dependencies": {
+    "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "pg": "^8.16.0"
   },
