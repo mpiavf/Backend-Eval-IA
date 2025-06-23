@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const pool = require('./config/db');
 
 const userRoutes = require('./routes/userRoutes');
 const docenteRoutes = require('./routes/docenteRoutes');
